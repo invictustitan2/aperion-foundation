@@ -1,8 +1,10 @@
 import os
 import sys
 import logging
+import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Always use repo-relative base path, never hardcode absolute paths!
+base = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 log_path = os.path.join(os.path.dirname(__file__), "foundation_test.log")
 logging.basicConfig(
@@ -15,7 +17,6 @@ def log(msg):
     logging.info(msg)
 
 def test_file_structure():
-    base = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     paths = [
         "cli.py",
         "core.py",
@@ -27,7 +28,11 @@ def test_file_structure():
         "memory/friday_memory_schema.sql",
         "memory/persona_mr_clean.json",
         "memory/__init__.py",
-        "__init__.py",
+        "README.md",
+        "requirements.txt",
+        ".gitignore",
+        "MANIFEST.md",
+        "tests/test_foundation.py",
     ]
     for path in paths:
         full_path = os.path.join(base, path)
@@ -37,14 +42,15 @@ def test_file_structure():
 
 def test_imports():
     try:
-        import brahma.cli
-        import brahma.core
-        import brahma.fsal
-        import brahma.persona_manager
-        import brahma.workflow
-        import brahma.backup
-        import brahma.memory.memory_manager
-        from brahma.memory.memory_manager import FridayMemoryManager
+        sys.path.insert(0, base)
+        import cli
+        import core
+        import fsal
+        import persona_manager
+        import workflow
+        import backup
+        from memory import memory_manager
+        from memory.memory_manager import FridayMemoryManager
         log("Imports succeeded")
     except Exception as e:
         import traceback
@@ -54,12 +60,12 @@ def test_imports():
         assert False, f"Cannot import: {tb}"
 
 def test_memory_manager_crud():
-    from brahma.memory.memory_manager import FridayMemoryManager
+    from memory.memory_manager import FridayMemoryManager
     import sqlite3
     import tempfile
     import shutil
 
-    schema_src = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'memory', 'friday_memory_schema.sql'))
+    schema_src = os.path.join(base, 'memory', 'friday_memory_schema.sql')
     tempdir = tempfile.mkdtemp()
     db_path = os.path.join(tempdir, "test_friday_memory.db")
     schema_path = os.path.join(tempdir, "friday_memory_schema.sql")
@@ -89,7 +95,7 @@ def test_memory_manager_crud():
 
 def test_cli_run_command():
     import subprocess
-    cli_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'cli.py'))
+    cli_path = os.path.join(base, 'cli.py')
     cmd = [
         sys.executable,
         cli_path,
@@ -103,13 +109,17 @@ def test_cli_run_command():
     assert result.returncode == 0
     assert b"System test" not in result.stderr  # No obvious errors
 
+@pytest.mark.skipif(
+    os.environ.get("CI") == "true" or not sys.stdin.isatty(),
+    reason="Skipped in CI/non-interactive environments"
+)
 def test_cli_chat_mode_exit():
     try:
         import pexpect
     except ImportError:
         log("pexpect not installed, skipping chat mode test.")
         return
-    cli_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'cli.py'))
+    cli_path = os.path.join(base, 'cli.py')
     log("Starting chat mode with 'exit' input...")
     child = pexpect.spawn(f"{sys.executable} {cli_path} chat", encoding="utf-8")
     child.expect("You >")  # Wait for prompt
@@ -130,7 +140,7 @@ def test_schema_file_content():
         "tags TEXT",
         "timestamp TEXT",
     ]
-    schema_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'memory', 'friday_memory_schema.sql'))
+    schema_path = os.path.join(base, 'memory', 'friday_memory_schema.sql')
     with open(schema_path, "r") as f:
         content = f.read()
     for line in required_lines:
@@ -138,7 +148,6 @@ def test_schema_file_content():
         assert line in content, f"Schema missing: {line}"
 
 def test_file_permissions():
-    base = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     paths = [
         "cli.py",
         "core.py",
